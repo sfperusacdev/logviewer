@@ -12,11 +12,7 @@ func main() {
 		log.Fatalln(err)
 	}
 	defer memory.Close()
-
-	logger, err := logviewer.NewSlog(memory)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	var logger = logviewer.NewSlog(memory)
 
 	logger.Info("Starting the application...")
 	logger.Info("Initializing configuration", "module", "config", "status", "pending")

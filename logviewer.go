@@ -59,17 +59,11 @@ func (l *sqliteLogger) ReadLines() ([]string, error) {
 	return values, nil
 }
 
-func NewSlog(memory MemoryLogger) (*slog.Logger, error) {
+func NewSlog(memory MemoryLogger) *slog.Logger {
 	var writer = io.MultiWriter(os.Stdout, memory)
-	// switch runtime.GOOS {
-	// case "windows":
-	// 	writer = memory
-	// default:
-	// 	writer = io.MultiWriter(os.Stdout, memory)
-	// }
 	var handler = slog.NewTextHandler(writer, nil)
 	var logger = slog.New(handler)
-	return logger, nil
+	return logger
 }
 
 type Log struct {
