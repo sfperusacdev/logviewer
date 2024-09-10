@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visualizador de Logs</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #121212;
+        color: #e0e0e0;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      #logContainer {
+        flex: 1;
+        border: 1px solid #333;
+        background-color: #1e1e1e;
+        overflow-y: scroll;
+        padding: 10px;
+        font-size: 12px;
+        line-height: 1.2;
+      }
+      .log-entry {
+        padding: 2px 0;
+        border-bottom: 1px solid #333;
+      }
+      .log-entry span {
+        font-weight: bold;
+        margin-right: 10px;
+      }
+      .INFO {
+        color: #00ff00;
+      }
+      .ERROR {
+        color: #ff5555;
+      }
+      .DEBUG {
+        color: #5555ff;
+      }
+      .WARN {
+        color: #ffaa00;
+      }
+      #filter {
+        width: 100%;
+        padding: 5px;
+        border: 1px solid #444;
+        font-size: 14px;
+        background-color: #333;
+        color: #e0e0e0;
+      }
+    </style>
+  </head>
+  <body>
+    <input
+      type="text"
+      id="filter"
+      placeholder="Filtrar logs por palabra clave..."
+    />
+    <div id="logContainer">
+      {{range .}}
+      <div class="log-entry">
+        <span class="{{.Type}}">{{.Type}}</span> {{.Message}}
+      </div>
+      {{end}}
+    </div>
+
+    <script>
+      // Filtrar los logs
+      document.getElementById("filter").addEventListener("input", function () {
+        const filtro = this.value.toLowerCase();
+        const logEntries = document.querySelectorAll(".log-entry");
+        logEntries.forEach((logEntry) => {
+          if (logEntry.textContent.toLowerCase().includes(filtro)) {
+            logEntry.style.display = "";
+          } else {
+            logEntry.style.display = "none";
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
