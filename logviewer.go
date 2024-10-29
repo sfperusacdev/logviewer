@@ -60,7 +60,7 @@ func (l *sqliteLogger) ReadLines() ([]string, error) {
 }
 
 func NewSlog(memory MemoryLogger) *slog.Logger {
-	var writer = io.MultiWriter(os.Stdout, memory)
+	var writer = io.MultiWriter(memory, os.Stdout)
 	var handler = slog.NewTextHandler(writer, nil)
 	var logger = slog.New(handler)
 	return logger
