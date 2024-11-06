@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	memory, err := logviewer.NewMemoryLogger()
+	memory, err := logviewer.NewMemoryLogger(logviewer.WithLogFile("./logfile.txt"))
 	if err != nil {
 		log.Fatalln(err)
 	}

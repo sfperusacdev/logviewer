@@ -2,7 +2,11 @@ package logviewer
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"io"
 	"log/slog"
@@ -18,12 +22,52 @@ type MemoryLogger interface {
 }
 
 type sqliteLogger struct {
-	db *sql.DB
+	db          *sql.DB
+	file        *os.File
+	DbPath      string
+	LogFilePath *string
 }
 
-func NewMemoryLogger() (MemoryLogger, error) {
-	var sqlitePath = ":memory:"
-	db, err := sql.Open("sqlite", sqlitePath)
+type Option = func(*sqliteLogger)
+
+func WithLogDbPath(dbpath string) Option {
+	return func(o *sqliteLogger) {
+		o.DbPath = dbpath
+	}
+}
+
+func WithLogFile(filePath string) Option {
+	return func(o *sqliteLogger) {
+		o.LogFilePath = &filePath
+	}
+}
+
+func NewMemoryLogger(options ...Option) (MemoryLogger, error) {
+	var logger = &sqliteLogger{
+		DbPath: ":memory:",
+	}
+	for _, opt := range options {
+		opt(logger)
+	}
+
+	if logger.LogFilePath != nil {
+		file, err := os.OpenFile(*logger.LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Println("ERROR: opening log file", logger.LogFilePath)
+			return nil, err
+		}
+		var builder strings.Builder
+		builder.WriteString(
+			fmt.Sprintln(
+				"-------------------------------",
+				time.Now().Format(time.DateTime),
+			),
+		)
+		file.WriteString(builder.String())
+		logger.file = file
+	}
+
+	db, err := sql.Open("sqlite", logger.DbPath)
 	if err != nil {
 		slog.Error("sqlite log db", "error", err)
 		return nil, err
@@ -32,17 +76,31 @@ func NewMemoryLogger() (MemoryLogger, error) {
 		slog.Error("creating log table", "error", err)
 		return nil, err
 	}
-
-	return &sqliteLogger{db: db}, nil
+	logger.db = db
+	return logger, nil
 }
 
-func (l *sqliteLogger) Close() error { return l.db.Close() }
+func (l *sqliteLogger) Close() error {
+	var err error
+	if l.db != nil {
+		err = errors.Join(err, l.db.Close())
+	}
+	if l.file != nil {
+		err = errors.Join(err, l.file.Close())
+	}
+	return err
+}
 
 func (l *sqliteLogger) Write(p []byte) (int, error) {
 	const qry = "INSERT INTO logs(value) VALUES (?)"
 	_, err := l.db.Exec(qry, string(p))
 	if err != nil {
 		log.Println("Insert log ERROR:", err)
+	}
+	if l.file != nil {
+		if _, fileErr := l.file.Write(p); fileErr != nil {
+			log.Println("ERROR: file log write", err)
+		}
 	}
 	return len(p), err
 }
