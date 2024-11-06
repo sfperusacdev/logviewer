@@ -1,18 +1,16 @@
 package logviewer
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"io"
 	"log/slog"
 	"os"
-
-	_ "modernc.org/sqlite"
 )
 
 type MemoryLogger interface {
@@ -21,20 +19,33 @@ type MemoryLogger interface {
 	Close() error
 }
 
+type logStorage struct {
+	sync.RWMutex
+	logLines []string
+}
+
+func (l *logStorage) AppendLine(line string) {
+	l.Lock()
+	defer l.Unlock()
+	l.logLines = append(l.logLines, line)
+}
+
+func (l *logStorage) GetLines() []string {
+	l.RLock()
+	defer l.RUnlock()
+	var dst = make([]string, len(l.logLines))
+	copy(dst, l.logLines)
+	return dst
+}
+
 type sqliteLogger struct {
-	db          *sql.DB
-	file        *os.File
-	DbPath      string
+	file   *os.File
+	memory *logStorage
+
 	LogFilePath *string
 }
 
 type Option = func(*sqliteLogger)
-
-func WithLogDbPath(dbpath string) Option {
-	return func(o *sqliteLogger) {
-		o.DbPath = dbpath
-	}
-}
 
 func WithLogFile(filePath string) Option {
 	return func(o *sqliteLogger) {
@@ -44,7 +55,7 @@ func WithLogFile(filePath string) Option {
 
 func NewMemoryLogger(options ...Option) (MemoryLogger, error) {
 	var logger = &sqliteLogger{
-		DbPath: ":memory:",
+		memory: &logStorage{logLines: make([]string, 0, 1000)},
 	}
 	for _, opt := range options {
 		opt(logger)
@@ -66,25 +77,11 @@ func NewMemoryLogger(options ...Option) (MemoryLogger, error) {
 		file.WriteString(builder.String())
 		logger.file = file
 	}
-
-	db, err := sql.Open("sqlite", logger.DbPath)
-	if err != nil {
-		slog.Error("sqlite log db", "error", err)
-		return nil, err
-	}
-	if _, err := db.Exec("create table logs(value text)"); err != nil {
-		slog.Error("creating log table", "error", err)
-		return nil, err
-	}
-	logger.db = db
 	return logger, nil
 }
 
 func (l *sqliteLogger) Close() error {
 	var err error
-	if l.db != nil {
-		err = errors.Join(err, l.db.Close())
-	}
 	if l.file != nil {
 		err = errors.Join(err, l.file.Close())
 	}
@@ -92,34 +89,18 @@ func (l *sqliteLogger) Close() error {
 }
 
 func (l *sqliteLogger) Write(p []byte) (int, error) {
-	const qry = "INSERT INTO logs(value) VALUES (?)"
-	_, err := l.db.Exec(qry, string(p))
-	if err != nil {
-		log.Println("Insert log ERROR:", err)
-	}
+	l.memory.AppendLine(string(p))
 	if l.file != nil {
 		if _, fileErr := l.file.Write(p); fileErr != nil {
-			log.Println("ERROR: file log write", err)
+			log.Println("ERROR: file log write", fileErr)
+			return len(p), fileErr
 		}
 	}
-	return len(p), err
+	return len(p), nil
 }
 
 func (l *sqliteLogger) ReadLines() ([]string, error) {
-	const qry = "select * from logs"
-	rows, err := l.db.Query(qry)
-	if err != nil {
-		log.Println("select logs ERROR", err)
-		return nil, err
-	}
-	defer rows.Close()
-	var values []string
-	for rows.Next() {
-		var value sql.NullString
-		rows.Scan(&value)
-		values = append(values, value.String)
-	}
-	return values, nil
+	return l.memory.GetLines(), nil
 }
 
 func NewSlog(memory MemoryLogger) *slog.Logger {
