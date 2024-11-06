@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"log"
 
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -40,10 +39,10 @@ func NewMemoryLogger() (MemoryLogger, error) {
 func (l *sqliteLogger) Close() error { return l.db.Close() }
 
 func (l *sqliteLogger) Write(p []byte) (int, error) {
-	const qry = "insert into logs(value) values ('%s')"
-	var _, err = l.db.Exec(fmt.Sprintf(qry, string(p)))
+	const qry = "INSERT INTO logs(value) VALUES (?)"
+	_, err := l.db.Exec(qry, string(p))
 	if err != nil {
-		log.Println("insert log ERROR", err)
+		log.Println("Insert log ERROR:", err)
 	}
 	return len(p), err
 }
